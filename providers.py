@@ -84,6 +84,69 @@ class OllamaBackend(BaseBackend):
                 out.append(name)
         return sorted(set(out))
 
+    # ---------------- 模型管理（Ollama 专有）
+    def list_models_detail(self):
+        """返回每个模型的体积 / 参数量 / 量化方式。"""
+        d = self._get("/api/tags", timeout=8)
+        out = []
+        for m in d.get("models", []):
+            det = m.get("details") or {}
+            name = m.get("name") or m.get("model") or ""
+            if not name:
+                continue
+            out.append({
+                "name": name,
+                "size": m.get("size") or 0,
+                "params": det.get("parameter_size") or "",
+                "quant": det.get("quantization_level") or "",
+                "family": det.get("family") or "",
+                "modified": m.get("modified_at") or "",
+            })
+        return sorted(out, key=lambda x: x["name"])
+
+    def running(self):
+        """当前加载在显存里的模型。"""
+        d = self._get("/api/ps", timeout=8)
+        out = {}
+        for m in d.get("models", []):
+            name = m.get("name") or m.get("model") or ""
+            if name:
+                out[name] = {
+                    "vram": m.get("size_vram") or 0,
+                    "size": m.get("size") or 0,
+                    "until": m.get("expires_at") or "",
+                }
+        return out
+
+    def pull(self, name):
+        """拉取模型，逐条 yield 进度对象。"""
+        payload = {"model": name, "stream": True}
+        req = urllib.request.Request(
+            self.base_url + "/api/pull",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=self._headers())
+        with urllib.request.urlopen(req, timeout=7200) as resp:
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                yield obj
+                if obj.get("status") == "success" or obj.get("error"):
+                    break
+
+    def delete(self, name):
+        payload = {"model": name}
+        req = urllib.request.Request(
+            self.base_url + "/api/delete",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=self._headers(), method="DELETE")
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status
+
     def stream_chat(self, model, messages, images=None, temperature=0.6,
                     num_ctx=8192, think=False):
         msgs = [dict(m) for m in messages]
@@ -160,6 +223,20 @@ class OpenAIBackend(BaseBackend):
             if mid:
                 out.append(mid)
         return sorted(set(out))
+
+    # ---------------- 只读（该协议没有拉取/删除接口）
+    def list_models_detail(self):
+        return [{"name": n, "size": 0, "params": "", "quant": "",
+                 "family": "", "modified": ""} for n in self.list_models()]
+
+    def running(self):
+        return {}
+
+    def pull(self, name):
+        raise BackendError("OpenAI 兼容后端不支持拉取模型，请用该服务自带的工具")
+
+    def delete(self, name):
+        raise BackendError("OpenAI 兼容后端不支持删除模型")
 
     @staticmethod
     def _encode_messages(messages, images):

@@ -499,6 +499,13 @@ class ChatApp:
         if not getattr(self, "_drop", None):
             self._drop = DropTarget(self.root, self._on_drop)
 
+        # 点顶栏胶囊切换模型
+        self.canvas.tag_bind("hdr_pill", "<Button-1>", self._show_model_menu)
+        self.canvas.tag_bind("hdr_pill", "<Enter>",
+                             lambda e: self.canvas.configure(cursor="hand2"))
+        self.canvas.tag_bind("hdr_pill", "<Leave>",
+                             lambda e: self.canvas.configure(cursor=""))
+
     # ---------------- 侧栏
     def _build_side(self):
         self.side_card = tk.Canvas(self.side, highlightthickness=0, bd=0, bg=CARD)
@@ -710,7 +717,7 @@ class ChatApp:
         pill_w = 210
         px = W - PAD - pill_w
         round_rect(self.canvas, px, 20, px + pill_w, 52, 16,
-                   fill=CARD, outline=LINE, tags="hdr")
+                   fill=CARD, outline=LINE, tags=("hdr", "hdr_pill"))
         self.canvas.create_oval(px + 16, 31, px + 24, 39, fill=OK, outline="", tags="hdr")
 
         # 面板
@@ -848,7 +855,7 @@ class ChatApp:
         pill_w = 210
         px = W - 22 - pill_w
         self.canvas.create_text(px + 32, 36, anchor="w", fill=INK_SOFT, font=F(9),
-                                text=self._model_text(), tags="hdr_txt")
+                                text=self._model_text(), tags=("hdr_txt", "hdr_pill"))
         self.canvas.create_text(W - 26, H - 12, anchor="e", fill=INK_SOFT, font=F(9),
                                 text=self._status_text(), tags="hdr_txt")
 
@@ -1530,6 +1537,38 @@ class ChatApp:
         RoundButton(win, "取消", command=win.destroy,
                     width=110, height=34, parent_bg=DIALOG_BG).place(x=200, y=618)
 
+    def _show_model_menu(self, _event=None):
+        """点顶栏胶囊弹出模型列表，直接切换。"""
+        if self.backend is None:
+            return
+        menu = tk.Menu(self.root, tearoff=0, bg=CARD, fg=INK, bd=0,
+                       activebackground=ACCENT, activeforeground="#FFFFFF",
+                       font=F(9))
+        try:
+            models = self.backend.list_models()
+        except Exception:
+            models = []
+        for name in models:
+            def pick(n=name):
+                self.current_model = n
+                self.settings["model"] = n
+                save_settings(self.settings)
+                self._do_layout_soft()
+            mark = "● " if name == self.current_model else "   "
+            menu.add_command(label=mark + name, command=pick)
+        if not models:
+            menu.add_command(label="（没找到模型）", state="disabled")
+        menu.add_separator()
+        menu.add_command(label="模型管理…", command=self._open_models)
+        menu.add_command(label="刷新列表", command=self._do_layout_soft)
+        try:
+            menu.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
+        finally:
+            menu.grab_release()
+
+    def _open_models(self):
+        ModelManager(self)
+
     def _switch_theme(self, name):
         """切主题：改全局配色后整窗重建，保留对话内容。"""
         if name == THEME:
@@ -1578,6 +1617,164 @@ class ChatApp:
                 self.q.put(("offline", None))
         threading.Thread(target=work, daemon=True).start()
         self.root.after(8000, self._ping)
+
+
+class ModelManager(tk.Toplevel):
+    """本地模型管理：查看体积/量化、拉取、删除、设为当前。"""
+
+    def __init__(self, app):
+        super().__init__(app.root)
+        self.app = app
+        self.title("模型管理")
+        self.configure(bg=DIALOG_BG)
+        self.geometry("780x520")
+        self.minsize(660, 440)
+        self.transient(app.root)
+
+        tk.Label(self, text="本地模型", bg=DIALOG_BG, fg=INK,
+                 font=F(11, "bold")).place(x=24, y=14)
+        RoundButton(self, "刷新", command=self.refresh, width=80, height=28,
+                    parent_bg=DIALOG_BG).place(x=676, y=10)
+
+        self.tree = ttk.Treeview(self, columns=("size", "params", "quant", "status"),
+                                 show="tree headings", height=12)
+        self.tree.heading("#0", text="模型")
+        self.tree.heading("size", text="大小")
+        self.tree.heading("params", text="参数")
+        self.tree.heading("quant", text="量化")
+        self.tree.heading("status", text="状态")
+        self.tree.column("#0", width=280, anchor="w")
+        self.tree.column("size", width=90, anchor="e")
+        self.tree.column("params", width=80, anchor="center")
+        self.tree.column("quant", width=100, anchor="center")
+        self.tree.column("status", width=180, anchor="w")
+        self.tree.place(x=24, y=44, width=732, height=290)
+        self.tree.bind("<Double-1>", lambda e: self.use())
+
+        y = 348
+        self.entry = tk.Entry(self, bg=ENTRY_BG, fg=INK, insertbackground=ACCENT,
+                              borderwidth=0, font=F(10))
+        self.entry.place(x=24, y=y, width=380, height=32)
+        self.entry.insert(0, "qwen3:8b")
+
+        RoundButton(self, "拉取", command=self.pull, kind="primary", width=90,
+                    height=32, parent_bg=DIALOG_BG).place(x=416, y=y)
+        RoundButton(self, "设为当前", command=self.use, width=100,
+                    height=32, parent_bg=DIALOG_BG).place(x=516, y=y)
+        RoundButton(self, "删除", command=self.remove, width=90,
+                    height=32, parent_bg=DIALOG_BG).place(x=626, y=y)
+
+        self.status = tk.Label(self, text="", bg=DIALOG_BG, fg=MUTED,
+                               font=F(9), anchor="w")
+        self.status.place(x=24, y=396, width=732)
+
+        tk.Label(self, text="双击某一行可直接切换；拉取后会自动出现在列表里",
+                 bg=DIALOG_BG, fg=MUTED, font=F(8), anchor="w").place(x=24, y=424, width=732)
+
+        self.refresh()
+
+    # ---------------- 数据
+    def _backend(self):
+        return getattr(self.app, "backend", None)
+
+    def refresh(self):
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+        b = self._backend()
+        if b is None:
+            self.status.configure(text="还没配置后端")
+            return
+        try:
+            details = b.list_models_detail()
+            running = b.running() if hasattr(b, "running") else {}
+        except Exception as e:
+            self.status.configure(text=f"读取失败：{e}")
+            return
+        for d in details:
+            name = d["name"]
+            key = name if name in running else (
+                name + ":latest" if (name + ":latest") in running else None)
+            st = ""
+            if key:
+                st = "运行中 · 显存 %.1f GB" % (running[key]["vram"] / 1e9)
+            size = d.get("size") or 0
+            self.tree.insert("", "end", text=name,
+                             values=(("%.2f GB" % (size / 1e9)) if size else "—",
+                                     d.get("params") or "—",
+                                     d.get("quant") or "—", st))
+        self.status.configure(text=f"共 {len(details)} 个模型")
+
+    def _selected(self):
+        sel = self.tree.selection()
+        if not sel:
+            self.status.configure(text="先选一个模型")
+            return None
+        return self.tree.item(sel[0], "text")
+
+    # ---------------- 操作
+    def use(self):
+        name = self._selected()
+        if not name:
+            return
+        self.app.current_model = name
+        self.app.settings["model"] = name
+        save_settings(self.app.settings)
+        self.app._do_layout_soft()
+        self.status.configure(text=f"当前模型已切换为 {name}")
+
+    def remove(self):
+        name = self._selected()
+        if not name:
+            return
+        if not messagebox.askyesno("删除模型", f"确定删除 {name}？\n磁盘上的权重会被移除。",
+                                   parent=self):
+            return
+        try:
+            self._backend().delete(name)
+            self.status.configure(text=f"已删除 {name}")
+        except Exception as e:
+            self.status.configure(text=f"删除失败：{e}")
+        self.refresh()
+
+    def pull(self):
+        name = self.entry.get().strip()
+        if not name:
+            return
+        b = self._backend()
+        if b is None or not hasattr(b, "pull"):
+            self.status.configure(text="当前后端不支持拉取")
+            return
+        self.status.configure(text=f"开始拉取 {name} …")
+
+        def ui(msg):
+            try:
+                self.status.configure(text=msg)
+            except Exception:
+                pass
+
+        def work():
+            try:
+                for obj in b.pull(name):
+                    err = obj.get("error")
+                    if err:
+                        self.after(0, lambda e=err: ui(f"失败：{e}"))
+                        return
+                    st = obj.get("status") or ""
+                    total = obj.get("total") or 0
+                    done = obj.get("completed") or 0
+                    if total:
+                        pct = done * 100 // total
+                        msg = "%s  %d%%  (%.1f / %.1f GB)" % (
+                            st, pct, done / 1e9, total / 1e9)
+                    else:
+                        msg = st
+                    self.after(0, lambda m=msg: ui(m))
+                self.after(0, lambda: ui(f"{name} 拉取完成"))
+                self.after(0, self.refresh)
+            except Exception as e:
+                self.after(0, lambda: ui(f"失败：{e}"))
+
+        threading.Thread(target=work, daemon=True).start()
 
 
 class BenchmarkWindow(tk.Toplevel):

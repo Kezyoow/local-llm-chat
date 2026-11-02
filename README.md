@@ -126,6 +126,14 @@ requirements.txt  third-party dependencies
 **Fonts render as boxes**
 → Your system lacks `Microsoft YaHei UI`; change `FONT_FAMILY` in `qwen_chat.py`
 
+## Privacy
+
+- Every request goes only to the local endpoint **you** configure (default `127.0.0.1`) — no third-party server, no proxy
+- No telemetry, no crash reporting, no update pings
+- Files are read **in place**: nothing is copied, uploaded, or written into a database.
+  Text is parsed into memory and released when the session ends
+- Conversation history is plain JSON under `sessions/`, deletable at any time (gitignored)
+
 ## Contributing
 
 Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
