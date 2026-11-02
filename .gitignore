@@ -1,0 +1,38 @@
+# 运行时产物与个人配置，不进仓库
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 个人数据
+settings.json
+sessions/
+_uploads/
+_backup/
+示例文件/
+
+# 用户自己的图片（版权自负，不随仓库分发）
+assets/background.jpg
+assets/side_card.jpg
+assets/background_v1.jpg
+
+# 训练产物（如果你也放这个仓库）
+out/
+*.gguf
+*.safetensors
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 系统
+Thumbs.db
+.DS_Store
+*.log
+
+# 个人笔记与临时文件
+Cline接入指南.md
+test1.py
+*.lnk
+_*.py
+_g*.py
