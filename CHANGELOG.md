@@ -4,31 +4,52 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+分类约定：`Added` 新功能 · `Changed` 行为变化 · `Fixed` 修 bug · `Removed` 移除 ·
+`Security` 安全相关 · `Known limitations` 已知限制。
+
 ## [Unreleased]
+
+（下个版本的改动先写在这里，发版时整段移到对应版本号下）
+
+## [0.2.1] - 2026-11-02
 
 ### Added
 
-- **退出时释放显存**：关闭窗口自动卸载所有已加载模型；可在模型管理里勾选"退出时关闭模型服务"
-- **启动自动拉起**：连不上本地 Ollama 时自动 `ollama serve`，服务关掉也不影响下次使用
+- **退出即释放显存**：关闭窗口时自动卸载所有已加载模型（`/api/chat` 带 `keep_alive=0`），
+  可在模型管理里勾选"退出客户端时关闭模型服务并释放显存"（默认开启）
+- **启动自动拉起**：连不上本地 Ollama 时自动执行 `ollama serve`，服务被关掉也不影响下次打开
+
+### Fixed
+
+- **窗口与任务栏图标**：改用 `qwen.ico`，不再是 tkinter 默认的羽毛图标
+- **自动拉起服务时弹出 CMD 黑窗**：`DETACHED_PROCESS` 与 `CREATE_NO_WINDOW` 标志语义冲突，
+  改为 `STARTUPINFO` + `SW_HIDE` + `CREATE_NO_WINDOW`
+- **线程安全**：服务就绪通知改为写入 UI 队列，不再从工作线程直接调用 tkinter
+  （无 mainloop 时会抛 `main thread is not in main loop`）
+
+### Changed
+
+- 启动时先做 0.35 秒端口探测再决定是否拉起服务，就绪时间从约 13 秒降到约 8 秒
+- 设置 `AppUserModelID`，任务栏不再和 `pythonw` 进程合并成一组
 
 ## [0.2.0] - 2026-11-02
 
 ### Added
 
-- **拖拽上传**：把文件拖进窗口即可添加（Windows 下走 `WM_DROPFILES`）
-- **图片缩略图**：图片附件的 chip 上直接显示 24×24 预览
-- **深色模式**：设置 → 外观 → 主题，切换即时重建界面并保留当前对话
-
-- **删除对话**：会话列表右键即可删除单条记录
-- **性能监控窗口**：GPU 利用率 / 显存 / 温度 / 功耗 / 内存 / CPU / 生成速度，每秒刷新并画 60 秒曲线
-- **模型管理窗口**：查看体积 / 参数量 / 量化方式、拉取（带进度）、删除、双击切换
-  （仅 Ollama 后端；OpenAI 兼容服务只读展示）
+- **模型管理窗口**：查看体积 / 参数量 / 量化方式 / 显存占用，拉取（带进度）、删除、双击切换
+  （Ollama 后端完整支持；OpenAI 兼容后端只读展示）
 - **顶栏快速切换**：点右上角模型胶囊直接弹列表，不用进设置
+- **性能监控窗口**：GPU 利用率、显存、温度、功耗、系统内存、CPU、实时 tok/s，
+  每秒刷新并绘制 60 秒滚动曲线（无需 psutil，直接读 `nvidia-smi` 与 Win32 API）
+- **删除对话**：会话列表右键即可删除单条记录
+- **拖拽上传**：文件直接拖进窗口（Windows `WM_DROPFILES`）
+- **图片缩略图**：图片附件 chip 上显示 24×24 预览
+- **深色模式**：设置 → 外观 → 主题，即时重建界面并保留当前对话
 
 ### Changed
 
-- 背景图与面板渲染加缓存，窗口缩放时不再重复解码 JPEG / 重算磨砂
-- 全局配色改为 `LIGHT` / `DARK` 两套调色板，`apply_theme()` 统一切换
+- 背景图与面板渲染加缓存，窗口缩放不再重复解码 JPEG / 重算磨砂
+- 全局配色改为 `LIGHT` / `DARK` 双调色板，由 `apply_theme()` 统一切换
 
 ## [0.1.0] - 2026-11-02
 
@@ -48,10 +69,10 @@
 - **测速面板**：固定提示词与生成长度，多次结果可对比
 - **界面**：玻璃拟态风格、圆角卡片、磨砂背景
   - 可自定义窗口背景与侧栏图片（设置 → 外观）
-  - 附图中性渐变默认素材，无版权限制
+  - 附中性渐变默认素材，无版权限制
 - **零配置**：连上服务后自动选中第一个可用模型
 - **工程**：GitHub Actions 多平台 CI（Ubuntu / Windows × Python 3.10 / 3.12）、
-  15 项冒烟测试、Dependabot、Issue / PR 模板
+  15 项冒烟测试、Dependabot、Issue / PR 模板、双语 README
 
 ### Known limitations
 
@@ -60,6 +81,6 @@
 - 不支持 `.doc` / `.xls` / `.ppt` 旧格式
 
 [Unreleased]: https://github.com/Kezyoow/local-llm-chat/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/Kezyoow/local-llm-chat/releases/tag/v0.2.1
-[0.2.0]: https://github.com/Kezyoow/local-llm-chat/releases/tag/v0.2.0
+[0.2.1]: https://github.com/Kezyoow/local-llm-chat/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/Kezyoow/local-llm-chat/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Kezyoow/local-llm-chat/releases/tag/v0.1.0
