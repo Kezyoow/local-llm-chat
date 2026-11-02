@@ -36,3 +36,6 @@ test1.py
 *.lnk
 _*.py
 _g*.py
+
+# 打包产物
+*.zip
