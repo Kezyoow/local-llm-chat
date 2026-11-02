@@ -24,6 +24,7 @@
 """
 
 import json
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -146,6 +147,49 @@ class OllamaBackend(BaseBackend):
             headers=self._headers(), method="DELETE")
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.status
+
+    # ---------------- 释放资源
+    def unload(self, name):
+        """立刻把模型从显存里卸掉（keep_alive=0）。"""
+        payload = {"model": name, "messages": [], "keep_alive": 0, "stream": False}
+        req = urllib.request.Request(
+            self.base_url + "/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=self._headers())
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                r.read()
+            return True
+        except Exception:
+            return False
+
+    def unload_all(self):
+        """卸载所有正在占用显存的模型，返回卸载了几个。"""
+        try:
+            names = list(self.running().keys())
+        except Exception:
+            names = []
+        n = 0
+        for name in names:
+            if self.unload(name):
+                n += 1
+        return n
+
+    def stop_server(self):
+        """结束 ollama 进程（连同它占的内存一起释放）。"""
+        import subprocess
+        try:
+            if sys.platform == "win32":
+                creation = 0x08000000
+                subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"],
+                               capture_output=True, timeout=10,
+                               creationflags=creation)
+            else:
+                subprocess.run(["pkill", "-f", "ollama"],
+                               capture_output=True, timeout=10)
+            return True
+        except Exception:
+            return False
 
     def stream_chat(self, model, messages, images=None, temperature=0.6,
                     num_ctx=8192, think=False):

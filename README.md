@@ -24,6 +24,7 @@
 - **Light / dark theme** — one click in settings, applied instantly without restarting
 - **Glassmorphism UI** — rounded cards, frosted background, custom window and sidebar images
 - **Zero config** — auto-detects the first available model after connecting
+- **Frees your VRAM on exit** — unloads every model and (optionally) stops the Ollama server when you close the window; restarts it on next launch
 
 ## Quick start
 

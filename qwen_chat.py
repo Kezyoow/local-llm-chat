@@ -109,6 +109,8 @@ DEFAULTS = {
     "calib": 1.6,
     # ---- 外观
     "bg_image": "", "side_image": "", "theme": "light",
+    # 退出时是否顺手关掉 ollama 服务（省显存与内存）
+    "stop_server_on_exit": True,
 }
 
 ALL_TYPES = (
@@ -436,6 +438,7 @@ class ChatApp:
         self._build()
         self._load_sessions()
         self._new_session(confirm=False)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._ping()
         self.root.after(40, self._drain)
 
@@ -1287,6 +1290,51 @@ class ChatApp:
                 self.q.put(("error", str(e)))
         self.q.put(("done", {"text": "".join(answer), "metrics": metrics}))
 
+    # ------------------------------------------------------------ 退出清理
+    def _on_close(self):
+        """退出前把模型从显存里清出去，必要时连服务一起关。"""
+        try:
+            self._shutdown_models()
+        except Exception:
+            pass
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def _shutdown_models(self):
+        b = self.backend
+        if b is None or getattr(b, "kind", "") != "ollama":
+            return
+        try:
+            b.unload_all()
+        except Exception:
+            pass
+        if self.settings.get("stop_server_on_exit", True):
+            try:
+                b.stop_server()
+            except Exception:
+                pass
+
+    def _ensure_server(self):
+        """后端连不上且是本地 ollama 时，尝试把服务拉起来。"""
+        if getattr(self, "_tried_start", False):
+            return False
+        self._tried_start = True
+        try:
+            import shutil
+            import subprocess
+            exe = shutil.which("ollama")
+            if not exe:
+                return False
+            flags = 0x08000000 | 0x00000008 if sys.platform == "win32" else 0
+            subprocess.Popen([exe, "serve"], creationflags=flags,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             close_fds=True)
+            return True
+        except Exception:
+            return False
+
     def _stop(self):
         self.cancel_flag = True
 
@@ -1639,6 +1687,7 @@ class ChatApp:
                     raise RuntimeError("未配置")
                 v = self.backend.ping()
                 self.q.put(("online", f"{self.backend.label} {v}"))
+                self._tried_start = False
                 if not (self.settings.get("model") or "").strip():
                     try:
                         ms = self.backend.list_models()
@@ -1651,6 +1700,7 @@ class ChatApp:
                         pass
             except Exception:
                 self.q.put(("offline", None))
+                self._ensure_server()
         threading.Thread(target=work, daemon=True).start()
         self.root.after(8000, self._ping)
 
@@ -1881,10 +1931,22 @@ class ModelManager(tk.Toplevel):
                                font=F(9), anchor="w")
         self.status.place(x=24, y=396, width=732)
 
+        self.stop_var = tk.BooleanVar(
+            value=bool(app.settings.get("stop_server_on_exit", True)))
+        tk.Checkbutton(self, text="退出客户端时关闭模型服务并释放显存",
+                       variable=self.stop_var, command=self._save_stop_flag,
+                       bg=DIALOG_BG, fg=INK_SOFT, selectcolor=ENTRY_BG,
+                       activebackground=DIALOG_BG, font=F(9), borderwidth=0,
+                       highlightthickness=0).place(x=22, y=420)
+
         tk.Label(self, text="双击某一行可直接切换；拉取后会自动出现在列表里",
-                 bg=DIALOG_BG, fg=MUTED, font=F(8), anchor="w").place(x=24, y=424, width=732)
+                 bg=DIALOG_BG, fg=MUTED, font=F(8), anchor="w").place(x=24, y=452, width=732)
 
         self.refresh()
+
+    def _save_stop_flag(self):
+        self.app.settings["stop_server_on_exit"] = bool(self.stop_var.get())
+        save_settings(self.app.settings)
 
     # ---------------- 数据
     def _backend(self):
