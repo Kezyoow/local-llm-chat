@@ -124,6 +124,12 @@ requirements.txt  third-party dependencies
 **Fonts render as boxes**
 → Your system lacks `Microsoft YaHei UI`; change `FONT_FAMILY` in `qwen_chat.py`
 
+## Contributing
+
+Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the dev setup, how to add a new backend, and the commit conventions.
+Release history lives in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](LICENSE).

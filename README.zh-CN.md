@@ -134,6 +134,11 @@ requirements.txt  第三方依赖
 **界面字体变成方块**
 → 系统没有 `Microsoft YaHei UI`，改 `qwen_chat.py` 里的 `FONT_FAMILY`
 
+## 贡献
+
+欢迎提 Issue 和 PR，细节见 [CONTRIBUTING.md](CONTRIBUTING.md)（环境准备、如何新增后端、提交规范）。
+版本历史见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 许可
 
 [MIT](LICENSE)。

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用问题 / Usage questions
+    url: https://github.com/Kezyoow/local-llm-chat/discussions
+    about: 装不上、连不上、不知道选哪个模型，来这里聊
+  - name: 上游项目 / Upstream
+    url: https://github.com/ollama/ollama/issues
+    about: 如果是 Ollama 本身的问题，请去上游反馈

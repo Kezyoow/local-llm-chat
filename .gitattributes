@@ -1,0 +1,15 @@
+# 统一换行符，避免 Windows 提交进来 CRLF 导致 diff 噪音
+* text=auto eol=lf
+
+# 二进制文件不要做换行转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.zip  binary
+*.gguf binary
+*.safetensors binary
+
+# GitHub 语法识别
+*.md   linguist-documentation
+LICENSE linguist-documentation

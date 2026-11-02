@@ -1,0 +1,48 @@
+name: Feature request
+description: 想要新功能 / Suggest an idea
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        想清楚"要解决什么问题"比"要什么功能"更有帮助。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的问题
+      description: 现在哪里不方便？
+      placeholder: 每次追问都要手动切换模型，很麻烦
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 你希望怎么做
+      placeholder: 希望对话里能记住上次用的模型
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你考虑过的替代方案
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的部分
+      multiple: true
+      options:
+        - 后端接入（Ollama / OpenAI 兼容）
+        - 文件与图片
+        - 界面与外观
+        - 会话管理
+        - 速度与性能
+        - 文档
+    validations:
+      required: true
