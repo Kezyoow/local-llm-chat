@@ -59,6 +59,7 @@
 - 扫描版 PDF 没有文字层，提取不到内容
 - 不支持 `.doc` / `.xls` / `.ppt` 旧格式
 
-[Unreleased]: https://github.com/Kezyoow/local-llm-chat/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Kezyoow/local-llm-chat/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Kezyoow/local-llm-chat/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Kezyoow/local-llm-chat/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Kezyoow/local-llm-chat/releases/tag/v0.1.0

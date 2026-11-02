@@ -45,6 +45,7 @@ def _asset(*names):
 
 
 # 用户自己的图优先，其次是仓库自带的中性默认图
+ICON_FILE = os.path.join(APP_DIR, "qwen.ico")
 BG_IMAGE = _asset("background.jpg", "default_bg.jpg")
 SIDE_IMAGE = _asset("side_card.jpg", "default_side.jpg")
 
@@ -477,6 +478,13 @@ class ChatApp:
     # ------------------------------------------------------------ 骨架
     def _build(self):
         self.root.title("本地大模型助手")
+        # 窗口 / 任务栏图标（缺文件时不报错）
+        try:
+            if os.path.isfile(ICON_FILE):
+                self.root.iconbitmap(ICON_FILE)          # 当前窗口（任务栏）
+                self.root.iconbitmap(default=ICON_FILE)  # 之后弹出的 Toplevel
+        except Exception:
+            pass
         self.root.geometry("1280x860")
         self.root.minsize(1060, 680)
         self.root.configure(bg=ROOT_BG)
@@ -2232,6 +2240,13 @@ class BenchmarkWindow(tk.Toplevel):
 
 
 def main():
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "Kezyoow.LocalLLMChat")
+        except Exception:
+            pass
     root = tk.Tk()
     app = ChatApp(root)
     app._on_resize()
