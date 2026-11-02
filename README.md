@@ -20,6 +20,8 @@
 - **Multi-turn sessions** — conversations are saved locally, can be revisited or deleted
 - **Live throughput** — estimated tok/s while generating, exact numbers afterwards (TTFT, prompt speed)
 - **Benchmark panel** — repeatable speed test with a comparison table
+- **Drag & drop** — drop files straight onto the window; image attachments get live thumbnails
+- **Light / dark theme** — one click in settings, applied instantly without restarting
 - **Glassmorphism UI** — rounded cards, frosted background, custom window and sidebar images
 - **Zero config** — auto-detects the first available model after connecting
 

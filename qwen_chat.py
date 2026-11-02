@@ -49,24 +49,53 @@ BG_IMAGE = _asset("background.jpg", "default_bg.jpg")
 SIDE_IMAGE = _asset("side_card.jpg", "default_side.jpg")
 
 # ---------------------------------------------------------------- 色板
-INK        = "#232830"
-INK_SOFT   = "#5B6572"
-MUTED      = "#98A1AE"
-LINE       = "#E9EDF3"
-CARD       = "#FCFCFD"
-ACCENT     = "#5B8DEF"
-ACCENT_DK  = "#4A7BE0"
-ACCENT_SOFT= "#EAF1FF"
-PINK       = "#F0A6B8"
-BUBBLE_ASST= "#F5F7FB"
-BUBBLE_USER= "#5B8DEF"
-THINK_BG   = "#F4F6F9"
-OK         = "#33C27F"
-BAD        = "#F0605D"
+LIGHT = {
+    "INK": "#232830", "INK_SOFT": "#5B6572", "MUTED": "#98A1AE",
+    "LINE": "#E9EDF3", "CARD": "#FCFCFD", "ACCENT": "#5B8DEF",
+    "ACCENT_DK": "#4A7BE0", "ACCENT_SOFT": "#EAF1FF", "PINK": "#F0A6B8",
+    "BUBBLE_ASST": "#F5F7FB", "BUBBLE_USER": "#5B8DEF", "THINK_BG": "#F4F6F9",
+    "OK": "#33C27F", "BAD": "#F0605D",
+    "FIELD_BG": "#EDF1F7", "FIELD_LINE": "#DEE5EF", "ROOT_BG": "#E8EDF5",
+    "DIALOG_BG": "#F7F9FC", "ENTRY_BG": "#FFFFFF",
+}
+DARK = {
+    "INK": "#E7ECF4", "INK_SOFT": "#A7B1C2", "MUTED": "#79839A",
+    "LINE": "#2F3847", "CARD": "#1A1F28", "ACCENT": "#6C9BFF",
+    "ACCENT_DK": "#5A89EE", "ACCENT_SOFT": "#233149", "PINK": "#E48FA6",
+    "BUBBLE_ASST": "#232B36", "BUBBLE_USER": "#4A7BE0", "THINK_BG": "#1E242E",
+    "OK": "#3DDC84", "BAD": "#FF6B6B",
+    "FIELD_BG": "#232B36", "FIELD_LINE": "#333C4D", "ROOT_BG": "#0D1015",
+    "DIALOG_BG": "#171C24", "ENTRY_BG": "#232B36",
+}
 
 FONT_FAMILY = "Microsoft YaHei UI"
-FIELD_BG = "#EDF1F7"
-FIELD_LINE = "#DEE5EF"
+
+# 下面这些是全局当前值，由 apply_theme() 填充
+THEME = "light"
+INK = INK_SOFT = MUTED = LINE = CARD = ACCENT = ACCENT_DK = ""
+ACCENT_SOFT = PINK = BUBBLE_ASST = BUBBLE_USER = THINK_BG = OK = BAD = ""
+FIELD_BG = FIELD_LINE = ROOT_BG = DIALOG_BG = ENTRY_BG = ""
+
+
+def apply_theme(name):
+    """切换全局配色。改完需要重建界面才会全部生效。"""
+    global THEME, INK, INK_SOFT, MUTED, LINE, CARD, ACCENT, ACCENT_DK
+    global ACCENT_SOFT, PINK, BUBBLE_ASST, BUBBLE_USER, THINK_BG, OK, BAD
+    global FIELD_BG, FIELD_LINE, ROOT_BG, DIALOG_BG, ENTRY_BG
+    pal = DARK if name == "dark" else LIGHT
+    THEME = "dark" if name == "dark" else "light"
+    INK = pal["INK"]; INK_SOFT = pal["INK_SOFT"]; MUTED = pal["MUTED"]
+    LINE = pal["LINE"]; CARD = pal["CARD"]; ACCENT = pal["ACCENT"]
+    ACCENT_DK = pal["ACCENT_DK"]; ACCENT_SOFT = pal["ACCENT_SOFT"]
+    PINK = pal["PINK"]; BUBBLE_ASST = pal["BUBBLE_ASST"]
+    BUBBLE_USER = pal["BUBBLE_USER"]; THINK_BG = pal["THINK_BG"]
+    OK = pal["OK"]; BAD = pal["BAD"]
+    FIELD_BG = pal["FIELD_BG"]; FIELD_LINE = pal["FIELD_LINE"]
+    ROOT_BG = pal["ROOT_BG"]; DIALOG_BG = pal["DIALOG_BG"]
+    ENTRY_BG = pal["ENTRY_BG"]
+
+
+apply_theme("light")
 
 DEFAULTS = {
     # ---- 后端
@@ -78,8 +107,8 @@ DEFAULTS = {
     # ---- 生成
     "temperature": 0.6, "num_ctx": 32768, "system": "", "think": False,
     "calib": 1.6,
-    # ---- 外观（留空 = 用 assets 里的默认图）
-    "bg_image": "", "side_image": "",
+    # ---- 外观
+    "bg_image": "", "side_image": "", "theme": "light",
 }
 
 ALL_TYPES = (
@@ -90,6 +119,61 @@ ALL_TYPES = (
     "*.go", "*.rs", "*.php", "*.rb", "*.sh", "*.ps1", "*.sql",
     "*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp", "*.gif",
 )
+
+
+# ---------------------------------------------------------------- 拖拽上传
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes as _wt
+
+    _LONG_PTR = ctypes.c_ssize_t
+    _WNDPROC = ctypes.WINFUNCTYPE(_LONG_PTR, _wt.HWND, ctypes.c_uint,
+                                  _wt.WPARAM, _wt.LPARAM)
+    _user32 = ctypes.WinDLL("user32", use_last_error=True)
+    _shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    _user32.SetWindowLongPtrW.restype = _LONG_PTR
+    _user32.SetWindowLongPtrW.argtypes = [_wt.HWND, ctypes.c_int, _LONG_PTR]
+    _user32.CallWindowProcW.restype = _LONG_PTR
+    _user32.CallWindowProcW.argtypes = [_LONG_PTR, _wt.HWND, ctypes.c_uint,
+                                        _wt.WPARAM, _wt.LPARAM]
+    _WM_DROPFILES = 0x0233
+
+
+class DropTarget:
+    """把窗口变成文件拖放目标（仅 Windows；其它平台静默跳过）。"""
+
+    def __init__(self, root, callback):
+        self.callback = callback
+        self._old = 0
+        self._proc = None
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = _user32.GetParent(root.winfo_id()) or root.winfo_id()
+            self._proc = _WNDPROC(self._handle)
+            _shell32.DragAcceptFiles(hwnd, True)
+            addr = ctypes.cast(self._proc, ctypes.c_void_p).value
+            self._old = _user32.SetWindowLongPtrW(hwnd, -4, _LONG_PTR(addr))
+        except Exception:
+            self._proc = None
+
+    def _handle(self, hwnd, msg, wparam, lparam):
+        if msg == _WM_DROPFILES:
+            try:
+                buf = ctypes.create_unicode_buffer(1024)
+                n = _shell32.DragQueryFileW(wparam, 0xFFFFFFFF, None, 0)
+                paths = []
+                for i in range(n):
+                    _shell32.DragQueryFileW(wparam, i, buf, 1024)
+                    if buf.value:
+                        paths.append(buf.value)
+                _shell32.DragFinish(wparam)
+                if paths:
+                    self.callback(paths)
+            except Exception:
+                pass
+            return 0
+        return _user32.CallWindowProcW(self._old, hwnd, msg, wparam, lparam)
 
 
 def F(size, weight="normal"):
@@ -127,8 +211,9 @@ def save_settings(s):
 class RoundButton(tk.Canvas):
     """圆角按钮（支持 primary / ghost 两种风格）。"""
 
-    def __init__(self, master, text, command=None, bg=CARD, kind="ghost",
+    def __init__(self, master, text, command=None, bg=None, kind="ghost",
                  width=None, height=36, radius=14, size=10, parent_bg=None):
+        bg = bg or CARD
         super().__init__(master, bg=parent_bg or bg, highlightthickness=0, bd=0,
                          height=height)
         self.command = command
@@ -168,7 +253,7 @@ class RoundButton(tk.Canvas):
             return (ACCENT_DK if hover else ACCENT, "#FFFFFF", "")
         if self.kind == "soft":
             return (ACCENT_SOFT if not hover else "#DCE8FF", ACCENT, "")
-        return ("#F3F5F9" if hover else "#FFFFFF", INK_SOFT, LINE)
+        return (ACCENT_SOFT if hover else CARD, INK_SOFT, LINE)
 
     def _paint(self, hover=False):
         self.delete("all")
@@ -197,17 +282,30 @@ class RoundButton(tk.Canvas):
 class Chip(tk.Canvas):
     """附件小标签（圆角胶囊）。"""
 
-    def __init__(self, master, name, meta, color, bg=CARD, on_close=None):
+    def __init__(self, master, name, meta, color, bg=None, on_close=None, thumb=None):
+        bg = bg or CARD
         super().__init__(master, bg=bg, highlightthickness=0, bd=0, height=30)
         self.name, self.meta, self.color = name, meta, color
         self.on_close = on_close
+        self._thumb = None
         f1 = tkfont.Font(font=F(9))
         f2 = tkfont.Font(font=F(8))
-        w = f1.measure(name) + f2.measure(meta) + 54
-        self.w = max(120, min(320, w))
+        pad = 34 if thumb else 0
+        w = f1.measure(name) + f2.measure(meta) + 54 + pad
+        self.w = max(120, min(340, w))
         self.configure(width=self.w)
-        round_rect(self, 1, 1, self.w - 1, 29, 13, fill="#FFFFFF", outline=LINE)
-        self.create_text(12, 15, text=name, anchor="w", fill=INK, font=F(9))
+        round_rect(self, 1, 1, self.w - 1, 29, 13, fill=CARD, outline=LINE)
+        if thumb:
+            try:
+                from PIL import Image as _Image
+                im = _Image.open(thumb).convert("RGB")
+                im.thumbnail((24, 24), _Image.LANCZOS)
+                self._thumb = ImageTk.PhotoImage(im)
+                self.create_image(16, 15, image=self._thumb)
+            except Exception:
+                pad = 0
+        x0 = 32 if pad else 12
+        self.create_text(x0, 15, text=name, anchor="w", fill=INK, font=F(9))
         self.create_text(self.w - 30, 15, text=meta, anchor="e", fill=color, font=F(8))
         self.x_item = self.create_text(self.w - 14, 14, text="×", fill=MUTED, font=F(10, "bold"))
         self.tag_bind(self.x_item, "<Button-1>", lambda e: on_close and on_close())
@@ -256,7 +354,8 @@ class Bubble(tk.Frame):
 class SlimScroll(tk.Canvas):
     """极简滚动条：一条细长的圆角滑块。"""
 
-    def __init__(self, master, view, bg=CARD, width=8):
+    def __init__(self, master, view, bg=None, width=8):
+        bg = bg or CARD
         super().__init__(master, bg=bg, highlightthickness=0, bd=0, width=width)
         self.view = view
         self.w = width
@@ -307,6 +406,7 @@ class ChatApp:
     def __init__(self, root):
         self.root = root
         self.settings = load_settings()
+        apply_theme(self.settings.get("theme", "light"))
         self.messages = []
         self.session_id = None
         self.session_path = None
@@ -372,13 +472,13 @@ class ChatApp:
         self.root.title("本地大模型助手")
         self.root.geometry("1280x860")
         self.root.minsize(1060, 680)
-        self.root.configure(bg="#E8EDF5")
+        self.root.configure(bg=ROOT_BG)
         try:
             self.root.attributes("-alpha", 0.995)
         except Exception:
             pass
 
-        self.canvas = tk.Canvas(self.root, highlightthickness=0, bd=0, bg="#E8EDF5")
+        self.canvas = tk.Canvas(self.root, highlightthickness=0, bd=0, bg=ROOT_BG)
         self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
 
         # 侧栏面板
@@ -394,6 +494,10 @@ class ChatApp:
 
         self.canvas.bind("<Configure>", self._on_resize)
         self.root.bind("<MouseWheel>", self._wheel)
+
+        # 拖拽文件到窗口即添加（Windows 生效；重建界面时不重复挂）
+        if not getattr(self, "_drop", None):
+            self._drop = DropTarget(self.root, self._on_drop)
 
     # ---------------- 侧栏
     def _build_side(self):
@@ -493,9 +597,22 @@ class ChatApp:
             self.root.after_cancel(self._rz_job)
         self._rz_job = self.root.after(120, self._do_layout)
 
+    def _bg_source(self):
+        """背景源图缓存：避免每次重排都重新解码 JPEG。"""
+        path = self._bg_path()
+        cache = getattr(self, "_src_cache", None)
+        if cache and cache[0] == path:
+            return cache[1]
+        try:
+            img = Image.open(path).convert("RGB")
+        except Exception:
+            img = Image.new("RGB", (16, 9), (232, 237, 245))
+        self._src_cache = (path, img)
+        return img
+
     def _make_backdrop(self, w, h):
         try:
-            src = Image.open(self._bg_path()).convert("RGB")
+            src = self._bg_source().copy()
         except Exception:
             return Image.new("RGB", (w, h), (232, 237, 245))
         s = max(w / src.width, h / src.height)
@@ -505,8 +622,10 @@ class ChatApp:
         top = max(0, int((src.height - h) * 0.35))
         src = src.crop((left, top, left + w, top + h))
         src = src.filter(ImageFilter.GaussianBlur(5))
-        white = Image.new("RGB", (w, h), (255, 255, 255))
-        src = Image.blend(src, white, 0.26)
+        if THEME == "dark":
+            src = Image.blend(src, Image.new("RGB", (w, h), (8, 10, 14)), 0.74)
+        else:
+            src = Image.blend(src, Image.new("RGB", (w, h), (255, 255, 255)), 0.26)
         veil = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(veil)
         for y in range(h):
@@ -516,8 +635,17 @@ class ChatApp:
         return out
 
     def _panel_image(self, x, y, w, h, radius=24):
-        """从背景裁一块，做磨砂 + 圆角 + 阴影。"""
+        """从背景裁一块，做磨砂 + 圆角 + 阴影（带缓存）。"""
         w, h = max(8, int(w)), max(8, int(h))
+        key = (int(x), int(y), w, h, radius, self.glass)
+        cache = getattr(self, "_panel_cache", None)
+        if cache is None:
+            cache = self._panel_cache = {}
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        if len(cache) > 12:
+            cache.clear()
         bw, bh = self.backdrop.size
         x, y = max(0, min(bw - w, int(x))), max(0, min(bh - h, int(y)))
         base = self.backdrop.crop((x, y, x + w, y + h)).convert("RGBA")
@@ -535,12 +663,15 @@ class ChatApp:
 
         body = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         gr, gg, gb = getattr(self, "glass_rgb", (250, 249, 251))
+        alpha = 224 if THEME == "dark" else getattr(self, "glass_alpha", 150)
         ImageDraw.Draw(body).rounded_rectangle(
             [0, 0, w - 1, h - 1], radius=radius,
-            fill=(gr, gg, gb, getattr(self, "glass_alpha", 150)))
+            fill=(gr, gg, gb, alpha))
         out = Image.alpha_composite(out, body)
+        border = (255, 255, 255, 38) if THEME == "dark" else (255, 255, 255, 200)
         ImageDraw.Draw(out).rounded_rectangle([0, 0, w - 1, h - 1], radius=radius,
-                                              outline=(255, 255, 255, 200), width=1)
+                                              outline=border, width=1)
+        cache[key] = out
         return out
 
     def _do_layout(self):
@@ -579,7 +710,7 @@ class ChatApp:
         pill_w = 210
         px = W - PAD - pill_w
         round_rect(self.canvas, px, 20, px + pill_w, 52, 16,
-                   fill="#FFFFFF", outline=LINE, tags="hdr")
+                   fill=CARD, outline=LINE, tags="hdr")
         self.canvas.create_oval(px + 16, 31, px + 24, 39, fill=OK, outline="", tags="hdr")
 
         # 面板
@@ -610,15 +741,18 @@ class ChatApp:
             r, g, b = self.backdrop.resize((1, 1), Image.LANCZOS).getpixel((0, 0))[:3]
         except Exception:
             r, g, b = (246, 244, 249)
-        mix = 0.70
-        r = int(r * (1 - mix) + 255 * mix)
-        g = int(g * (1 - mix) + 255 * mix)
-        b = int(b * (1 - mix) + 255 * mix)
+        if THEME == "dark":
+            base, mix = (22, 26, 34), 0.80
+        else:
+            base, mix = (255, 255, 255), 0.70
+        r = int(r * (1 - mix) + base[0] * mix)
+        g = int(g * (1 - mix) + base[1] * mix)
+        b = int(b * (1 - mix) + base[2] * mix)
         self.glass_rgb = (r, g, b)
         self.glass = "#%02X%02X%02X" % (r, g, b)
 
     def _apply_glass(self):
-        g = getattr(self, "glass", "#F6F4F9")
+        g = getattr(self, "glass", CARD)
         for w in (self.side, self.side_card, self.sess_cv, self.sess_inner,
                   self.chat_cv, self.chat_inner, self.input_frame, self.row_top,
                   self.row_chips, self.chips_row, self.row_bot, self.field):
@@ -938,6 +1072,13 @@ class ChatApp:
         except Exception:
             return None
 
+    def _on_drop(self, paths):
+        """拖拽回调可能在 Tk 的消息循环外触发，切回主线程处理。"""
+        try:
+            self.root.after(0, lambda: self._add_paths(paths))
+        except Exception:
+            pass
+
     def _add_paths(self, paths):
         paths = [p for p in paths if p][:12]
         if not paths:
@@ -960,8 +1101,9 @@ class ChatApp:
                 meta, color = a.get("detail", "图片"), ACCENT
             else:
                 meta, color = f"{a['chars']}字", OK
+            thumb = a.get("path") if a.get("kind") == "image" and not a.get("error") else None
             Chip(self.chips_row, a["name"], meta, color,
-                 bg=getattr(self, "glass", CARD),
+                 bg=getattr(self, "glass", CARD), thumb=thumb,
                  on_close=lambda i=idx: self._remove_attachment(i)).pack(side="left", padx=4)
         if self._ingesting:
             tk.Label(self.chips_row, text=f"解析中 {self._ingesting}…", bg=CARD,
@@ -1179,23 +1321,23 @@ class ChatApp:
     def _open_settings(self):
         win = tk.Toplevel(self.root)
         win.title("设置")
-        win.configure(bg="#F7F9FC")
-        win.geometry("560x640")
+        win.configure(bg=DIALOG_BG)
+        win.geometry("560x680")
         win.transient(self.root)
         win.grab_set()
 
         def lab(t, y, x=28):
-            tk.Label(win, text=t, bg="#F7F9FC", fg=INK_SOFT,
+            tk.Label(win, text=t, bg=DIALOG_BG, fg=INK_SOFT,
                      font=F(9)).place(x=x, y=y)
 
         def entry(var, y, x=28, w=504, show=""):
-            e = tk.Entry(win, textvariable=var, bg="#FFFFFF", fg=INK,
+            e = tk.Entry(win, textvariable=var, bg=ENTRY_BG, fg=INK,
                          insertbackground=ACCENT, borderwidth=0, font=F(10), show=show)
             e.place(x=x, y=y, width=w, height=30)
             return e
 
         def head(t, y):
-            tk.Label(win, text=t, bg="#F7F9FC", fg=INK,
+            tk.Label(win, text=t, bg=DIALOG_BG, fg=INK,
                      font=F(11, "bold")).place(x=28, y=y)
 
         # ---------------- 模型服务
@@ -1218,7 +1360,7 @@ class ChatApp:
         url_var = tk.StringVar(value=self.settings.get("base_url", ""))
         entry(url_var, 116, w=380)
         test_btn = RoundButton(win, "测试", command=lambda: do_test(),
-                               width=110, height=30, parent_bg="#F7F9FC")
+                               width=110, height=30, parent_bg=DIALOG_BG)
         test_btn.place(x=422, y=116)
 
         lab("API Key（本地服务通常留空）", 152)
@@ -1230,7 +1372,7 @@ class ChatApp:
         model_cb = ttk.Combobox(win, textvariable=model_var, font=F(9), values=[])
         model_cb.place(x=28, y=228, width=380, height=28)
         RoundButton(win, "获取列表", command=lambda: do_fetch(),
-                    width=110, height=30, parent_bg="#F7F9FC").place(x=422, y=228)
+                    width=110, height=30, parent_bg=DIALOG_BG).place(x=422, y=228)
 
         lab("视觉模型（可选，留空则图片直接发给主模型）", 264)
         vmodel_var = tk.StringVar(value=self.settings.get("vision_model", ""))
@@ -1241,8 +1383,8 @@ class ChatApp:
         lab("温度", 352)
         temp_var = tk.StringVar(value=str(self.settings["temperature"]))
         tk.Spinbox(win, from_=0.0, to=2.0, increment=0.05, textvariable=temp_var,
-                   bg="#FFFFFF", fg=INK, borderwidth=0, font=F(9),
-                   buttonbackground="#FFFFFF").place(x=28, y=372, width=120, height=28)
+                   bg=ENTRY_BG, fg=INK, borderwidth=0, font=F(9),
+                   buttonbackground=ENTRY_BG).place(x=28, y=372, width=120, height=28)
 
         lab("上下文", 352, x=168)
         ctx_var = tk.StringVar(value=str(self.settings["num_ctx"]))
@@ -1252,8 +1394,8 @@ class ChatApp:
 
         think_var = tk.BooleanVar(value=bool(self.settings.get("think")))
         tk.Checkbutton(win, text="开启思考模式（慢，推理更细）", variable=think_var,
-                       bg="#F7F9FC", fg=INK_SOFT, selectcolor="#FFFFFF",
-                       activebackground="#F7F9FC", font=F(9), borderwidth=0,
+                       bg=DIALOG_BG, fg=INK_SOFT, selectcolor=ENTRY_BG,
+                       activebackground=DIALOG_BG, font=F(9), borderwidth=0,
                        highlightthickness=0).place(x=318, y=370)
 
         lab("系统提示词（可留空）", 408)
@@ -1261,26 +1403,33 @@ class ChatApp:
         entry(sys_var, 428)
 
         # ---------------- 外观
-        head("外观", 470)
+        head("外观", 462)
+
+        lab("主题", 488)
+        theme_var = tk.StringVar(value=self.settings.get("theme", "light"))
+        ttk.Combobox(win, textvariable=theme_var, state="readonly", font=F(9),
+                     values=["light", "dark"]
+                     ).place(x=108, y=486, width=140, height=26)
+        lab("（保存后立即生效）", 516)
 
         bg_lbl = tk.Label(win, text=os.path.basename(self._bg_path()),
-                          bg="#F7F9FC", fg=MUTED, font=F(8), anchor="w")
+                          bg=DIALOG_BG, fg=MUTED, font=F(8), anchor="w")
         side_lbl = tk.Label(win, text=os.path.basename(self._side_path()),
-                            bg="#F7F9FC", fg=MUTED, font=F(8), anchor="w")
+                            bg=DIALOG_BG, fg=MUTED, font=F(8), anchor="w")
 
-        lab("窗口背景图", 496)
-        bg_lbl.place(x=108, y=497, width=200)
+        lab("窗口背景图", 548)
+        bg_lbl.place(x=108, y=549, width=200)
         RoundButton(win, "选择", command=lambda: pick("bg_image", bg_lbl),
-                    width=70, height=26, parent_bg="#F7F9FC").place(x=318, y=494)
+                    width=70, height=26, parent_bg=DIALOG_BG).place(x=318, y=546)
         RoundButton(win, "默认", command=lambda: reset("bg_image", bg_lbl),
-                    width=70, height=26, parent_bg="#F7F9FC").place(x=396, y=494)
+                    width=70, height=26, parent_bg=DIALOG_BG).place(x=396, y=546)
 
-        lab("侧栏图片", 532)
-        side_lbl.place(x=108, y=533, width=200)
+        lab("侧栏图片", 584)
+        side_lbl.place(x=108, y=585, width=200)
         RoundButton(win, "选择", command=lambda: pick("side_image", side_lbl),
-                    width=70, height=26, parent_bg="#F7F9FC").place(x=318, y=530)
+                    width=70, height=26, parent_bg=DIALOG_BG).place(x=318, y=582)
         RoundButton(win, "默认", command=lambda: reset("side_image", side_lbl),
-                    width=70, height=26, parent_bg="#F7F9FC").place(x=396, y=530)
+                    width=70, height=26, parent_bg=DIALOG_BG).place(x=396, y=582)
 
         # ---------------- 行为
         def sync_backend():
@@ -1369,14 +1518,40 @@ class ChatApp:
             sync_backend()
             save_settings(self.settings)
             self.current_model = self.settings["model"]
+            new_theme = theme_var.get()
             self._apply_images()
             self._do_layout_soft()
             win.destroy()
+            if new_theme != THEME:
+                self._switch_theme(new_theme)
 
         RoundButton(win, "保存", command=apply, kind="primary",
-                    width=110, height=34, parent_bg="#F7F9FC").place(x=318, y=576)
+                    width=110, height=34, parent_bg=DIALOG_BG).place(x=318, y=618)
         RoundButton(win, "取消", command=win.destroy,
-                    width=110, height=34, parent_bg="#F7F9FC").place(x=200, y=576)
+                    width=110, height=34, parent_bg=DIALOG_BG).place(x=200, y=618)
+
+    def _switch_theme(self, name):
+        """切主题：改全局配色后整窗重建，保留对话内容。"""
+        if name == THEME:
+            return
+        apply_theme(name)
+        self.settings["theme"] = THEME
+        save_settings(self.settings)
+        msgs = list(self.messages)
+        for w in self.root.winfo_children():
+            w.destroy()
+        self.bubbles = []
+        self._cur_bubble = None
+        self._last_size = (0, 0)
+        self._panel_cache = {}
+        self._build()
+        self._load_sessions()
+        self._new_session(confirm=False)
+        self.messages = msgs
+        for m in msgs:
+            role = "user" if m.get("role") == "user" else "asst"
+            self._add_bubble(m.get("content", ""), role)
+        self._do_layout_soft()
 
     def _open_benchmark(self):
         BenchmarkWindow(self)
@@ -1410,7 +1585,7 @@ class BenchmarkWindow(tk.Toplevel):
         super().__init__(app.root)
         self.app = app
         self.title("输出速度测试")
-        self.configure(bg="#F7F9FC")
+        self.configure(bg=DIALOG_BG)
         self.geometry("600x520")
         self.transient(app.root)
         self.running = False
@@ -1420,30 +1595,30 @@ class BenchmarkWindow(tk.Toplevel):
         self.chars = 0
 
         tk.Label(self, text="固定提示词与生成长度，tok/s 才有可比性。",
-                 bg="#F7F9FC", fg=MUTED, font=F(9)).place(x=24, y=18)
-        self.p_text = tk.Text(self, height=3, bg="#FFFFFF", fg=INK, insertbackground=ACCENT,
+                 bg=DIALOG_BG, fg=MUTED, font=F(9)).place(x=24, y=18)
+        self.p_text = tk.Text(self, height=3, bg=ENTRY_BG, fg=INK, insertbackground=ACCENT,
                               borderwidth=0, font=F(10), padx=10, pady=8, wrap="word")
         self.p_text.place(x=24, y=44, width=552, height=76)
         self.p_text.insert("1.0", "用一个段落介绍光合作用，要求 200 字左右，语言通俗。")
 
-        tk.Label(self, text="生成上限", bg="#F7F9FC", fg=INK_SOFT,
+        tk.Label(self, text="生成上限", bg=DIALOG_BG, fg=INK_SOFT,
                  font=F(9)).place(x=24, y=132)
         self.n_var = tk.StringVar(value="256")
         tk.Spinbox(self, from_=32, to=2048, increment=32, textvariable=self.n_var,
-                   bg="#FFFFFF", fg=INK, borderwidth=0, font=F(10),
-                   buttonbackground="#FFFFFF").place(x=88, y=128, width=90, height=30)
+                   bg=ENTRY_BG, fg=INK, borderwidth=0, font=F(10),
+                   buttonbackground=ENTRY_BG).place(x=88, y=128, width=90, height=30)
         self.think_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(self, text="开思考模式", variable=self.think_var, bg="#F7F9FC",
-                       fg=INK_SOFT, selectcolor="#FFFFFF", activebackground="#F7F9FC",
+        tk.Checkbutton(self, text="开思考模式", variable=self.think_var, bg=DIALOG_BG,
+                       fg=INK_SOFT, selectcolor=ENTRY_BG, activebackground=DIALOG_BG,
                        font=F(9), borderwidth=0,
                        highlightthickness=0).place(x=196, y=130)
 
         self.run_btn = RoundButton(self, text="开始测速", command=self._run, kind="primary",
-                                   width=552, height=38, radius=14, parent_bg="#F7F9FC")
+                                   width=552, height=38, radius=14, parent_bg=DIALOG_BG)
         self.run_btn.place(x=24, y=168)
-        self.live = tk.Label(self, text="就绪", bg="#F7F9FC", fg=MUTED, font=F(11, "bold"))
+        self.live = tk.Label(self, text="就绪", bg=DIALOG_BG, fg=MUTED, font=F(11, "bold"))
         self.live.place(x=24, y=216)
-        self.out = tk.Text(self, bg="#FFFFFF", fg=INK_SOFT, borderwidth=0,
+        self.out = tk.Text(self, bg=ENTRY_BG, fg=INK_SOFT, borderwidth=0,
                            font=("Consolas", 9), padx=12, pady=10, wrap="none",
                            state="disabled")
         self.out.place(x=24, y=248, width=552, height=250)
