@@ -8,6 +8,13 @@ CI 里跑：  python tests/test_basic.py
 import os
 import sys
 
+# Windows 的 CI runner 默认 cp1252，打印中文会 UnicodeEncodeError
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
