@@ -439,6 +439,10 @@ class ChatApp:
         self._load_sessions()
         self._new_session(confirm=False)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # 本地 ollama 没在跑就直接拉起，不必等第一次 ping 超时
+        if self.settings.get("backend", "ollama") == "ollama" and not self._port_open():
+            self._ensure_server()
         self._ping()
         self.root.after(40, self._drain)
 
@@ -1316,24 +1320,73 @@ class ChatApp:
             except Exception:
                 pass
 
+    def _port_open(self, timeout=0.35):
+        """快速探测 base_url 的端口通不通（比 ping 的全超时快得多）。"""
+        try:
+            import socket
+            from urllib.parse import urlparse
+            u = urlparse(self.settings.get("base_url") or "http://127.0.0.1:11434")
+            host = u.hostname or "127.0.0.1"
+            port = u.port or (443 if u.scheme == "https" else 80)
+            sk = socket.socket()
+            sk.settimeout(timeout)
+            try:
+                return sk.connect_ex((host, port)) == 0
+            finally:
+                sk.close()
+        except Exception:
+            return True
+
     def _ensure_server(self):
-        """后端连不上且是本地 ollama 时，尝试把服务拉起来。"""
+        """后端连不上且是本地 ollama 时，静默把服务拉起来（不弹黑窗）。"""
         if getattr(self, "_tried_start", False):
             return False
         self._tried_start = True
         try:
             import shutil
             import subprocess
-            exe = shutil.which("ollama")
-            if not exe:
+
+            exe = os.environ.get("OLLAMA_EXE") or shutil.which("ollama")
+            if not exe or not os.path.isfile(exe):
                 return False
-            flags = 0x08000000 | 0x00000008 if sys.platform == "win32" else 0
-            subprocess.Popen([exe, "serve"], creationflags=flags,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             close_fds=True)
+
+            kwargs = {}
+            if sys.platform == "win32":
+                # CREATE_NO_WINDOW 建隐藏控制台；STARTUPINFO 再兜一层 SW_HIDE，
+                # 两者都不能省，否则控制台子进程会自己弹窗
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = 0                      # SW_HIDE
+                kwargs["startupinfo"] = si
+                kwargs["creationflags"] = 0x08000000    # CREATE_NO_WINDOW
+
+            subprocess.Popen([exe, "serve"],
+                             stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,
+                             close_fds=True, **kwargs)
+
+            # 拉起后轮询等它就绪，比等下一次 ping（8 秒后）快得多
+            threading.Thread(target=self._wait_server, daemon=True).start()
             return True
         except Exception:
             return False
+
+    def _wait_server(self):
+        """等服务就绪，就绪后立刻刷新状态，不必等下一个 ping 周期。"""
+        b = self.backend
+        if b is None:
+            return
+        for _ in range(80):
+            time.sleep(0.25)
+            try:
+                v = b.ping()
+            except Exception:
+                continue
+            # 只往队列里放，界面刷新交给主线程的 _drain，
+            # 工作线程直接碰 tkinter 会在没有 mainloop 时报错
+            self.q.put(("online", f"{b.label} {v}"))
+            return
 
     def _stop(self):
         self.cancel_flag = True
