@@ -904,9 +904,41 @@ class ChatApp:
         cv.bind("<Enter>", lambda e: paint(True))
         cv.bind("<Leave>", lambda e: paint(False))
         cv.bind("<Button-1>", lambda e: self._on_pick_session(idx))
+        cv.bind("<Button-3>", lambda e: self._session_menu(e, idx))
         cv.selected_state = selected
         cv.paint = paint
         return cv
+
+    def _session_menu(self, event, idx):
+        menu = tk.Menu(self.root, tearoff=0, bg=CARD, fg=INK, bd=0,
+                       activebackground=ACCENT, activeforeground="#FFFFFF", font=F(9))
+        menu.add_command(label="打开", command=lambda: self._on_pick_session(idx))
+        menu.add_command(label="删除这条对话", command=lambda: self._delete_session(idx))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _delete_session(self, idx):
+        files = self._session_files()
+        if idx >= len(files):
+            return
+        path = files[idx]
+        name = os.path.basename(path)
+        if not messagebox.askyesno("删除对话",
+                                   f"确定删除这条对话记录？\n{name}\n删除后无法恢复。",
+                                   parent=self.root):
+            return
+        is_current = (self.session_path == path)
+        try:
+            os.remove(path)
+        except Exception as e:
+            self._toast(f"删除失败：{e}")
+            return
+        if is_current:
+            self._new_session(confirm=False)
+        self._load_sessions()
+        self._toast("已删除")
 
     def _mark_selected(self, idx):
         for i, row in enumerate(getattr(self, "sess_rows", [])):
@@ -1560,6 +1592,7 @@ class ChatApp:
             menu.add_command(label="（没找到模型）", state="disabled")
         menu.add_separator()
         menu.add_command(label="模型管理…", command=self._open_models)
+        menu.add_command(label="性能监控…", command=self._open_perf)
         menu.add_command(label="刷新列表", command=self._do_layout_soft)
         try:
             menu.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
@@ -1568,6 +1601,9 @@ class ChatApp:
 
     def _open_models(self):
         ModelManager(self)
+
+    def _open_perf(self):
+        PerfWindow(self)
 
     def _switch_theme(self, name):
         """切主题：改全局配色后整窗重建，保留对话内容。"""
@@ -1617,6 +1653,183 @@ class ChatApp:
                 self.q.put(("offline", None))
         threading.Thread(target=work, daemon=True).start()
         self.root.after(8000, self._ping)
+
+
+class PerfWindow(tk.Toplevel):
+    """实时性能监控：GPU 利用率 / 显存 / 温度 / 功耗 / 内存 / CPU / 生成速度。"""
+
+    QUERY = ("utilization.gpu,memory.used,memory.total,"
+             "temperature.gpu,power.draw")
+
+    def __init__(self, app):
+        super().__init__(app.root)
+        self.app = app
+        self.title("性能监控")
+        self.configure(bg=DIALOG_BG)
+        self.geometry("640x500")
+        self.minsize(560, 460)
+        self.transient(app.root)
+        self._dead = False
+        self.hist = {"gpu": [], "vram": []}
+        self._last_cpu = None
+
+        self.labels = {}
+        rows = [("gpu", "GPU 利用率"), ("vram", "显存"), ("temp", "温度"),
+                ("power", "功耗"), ("mem", "系统内存"), ("cpu", "CPU"),
+                ("tps", "生成速度"), ("model", "当前模型")]
+        y = 16
+        for key, name in rows:
+            tk.Label(self, text=name, bg=DIALOG_BG, fg=MUTED, font=F(9),
+                     anchor="w").place(x=24, y=y, width=110)
+            lab = tk.Label(self, text="—", bg=DIALOG_BG, fg=INK,
+                           font=F(10, "bold"), anchor="w")
+            lab.place(x=140, y=y - 2, width=280)
+            self.labels[key] = lab
+            y += 34
+
+        self.cv = tk.Canvas(self, bg=CARD, highlightthickness=0, bd=0, height=140)
+        self.cv.place(x=24, y=290, width=592, height=140)
+        tk.Label(self, text="最近 60 秒 · GPU 利用率（蓝） / 显存占用（粉）",
+                 bg=DIALOG_BG, fg=MUTED, font=F(8), anchor="w").place(x=24, y=436, width=592)
+        tk.Label(self, text="数据来源 nvidia-smi，每秒刷新一次",
+                 bg=DIALOG_BG, fg=MUTED, font=F(8), anchor="w").place(x=24, y=458, width=592)
+
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        self._tick()
+
+    def _close(self):
+        self._dead = True
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
+    # ---------------- 采样
+    def _sample_gpu(self):
+        import subprocess
+        creation = 0x08000000 if sys.platform == "win32" else 0
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=" + self.QUERY,
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=4,
+            creationflags=creation)
+        line = (out.stdout or "").strip().splitlines()[0]
+        util, used, total, temp, power = [x.strip() for x in line.split(",")]
+        return {
+            "util": float(util),
+            "used": float(used) / 1024.0,
+            "total": float(total) / 1024.0,
+            "temp": float(temp),
+            "power": float(power) if power not in ("[N/A]", "N/A") else None,
+        }
+
+    def _sample_ram(self):
+        import ctypes
+
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong),
+                        ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong),
+                        ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong),
+                        ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong),
+                        ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+        m = MEMORYSTATUSEX()
+        m.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+        used = (m.ullTotalPhys - m.ullAvailPhys) / 1e9
+        total = m.ullTotalPhys / 1e9
+        return used, total
+
+    def _sample_cpu(self):
+        import ctypes
+        idle = ctypes.c_ulonglong()
+        kern = ctypes.c_ulonglong()
+        user = ctypes.c_ulonglong()
+        ctypes.windll.kernel32.GetSystemTimes(
+            ctypes.byref(idle), ctypes.byref(kern), ctypes.byref(user))
+        total = kern.value + user.value
+        idle_v = idle.value
+        if self._last_cpu is None:
+            self._last_cpu = (total, idle_v)
+            return None
+        dt = total - self._last_cpu[0]
+        di = idle_v - self._last_cpu[1]
+        self._last_cpu = (total, idle_v)
+        if dt <= 0:
+            return None
+        return max(0.0, min(100.0, 100.0 * (1 - di / dt)))
+
+    # ---------------- 循环
+    def _tick(self):
+        if self._dead:
+            return
+        try:
+            g = self._sample_gpu()
+            self.labels["gpu"].configure(text=f"{g['util']:.0f} %")
+            self.labels["vram"].configure(
+                text=f"{g['used']:.2f} / {g['total']:.1f} GB")
+            self.labels["temp"].configure(text=f"{g['temp']:.0f} °C")
+            self.labels["power"].configure(
+                text=(f"{g['power']:.0f} W" if g["power"] else "—"))
+            self.hist["gpu"].append(g["util"])
+            self.hist["vram"].append(100.0 * g["used"] / max(1.0, g["total"]))
+        except Exception:
+            self.labels["gpu"].configure(text="不可用（没检测到 NVIDIA GPU）")
+        for k in ("gpu", "vram"):
+            if len(self.hist[k]) > 60:
+                del self.hist[k][:-60]
+
+        try:
+            used, total = self._sample_ram()
+            self.labels["mem"].configure(text=f"{used:.1f} / {total:.1f} GB")
+        except Exception:
+            pass
+        try:
+            c = self._sample_cpu()
+            if c is not None:
+                self.labels["cpu"].configure(text=f"{c:.0f} %")
+        except Exception:
+            pass
+
+        if self.app.streaming and self.app._chars and self.app._first:
+            gen = max(0.1, time.time() - self.app._first)
+            tps = (self.app._chars / self.app.calib) / gen
+            self.labels["tps"].configure(text=f"≈ {tps:.0f} tok/s（生成中）")
+        else:
+            self.labels["tps"].configure(text="空闲")
+        self.labels["model"].configure(text=self.app.current_model or "—")
+
+        self._draw()
+        self.after(1000, self._tick)
+
+    def _draw(self):
+        cv = self.cv
+        cv.delete("all")
+        w = cv.winfo_width() or 592
+        h = cv.winfo_height() or 140
+        for i in range(1, 4):
+            y = h * i / 4
+            cv.create_line(0, y, w, y, fill=LINE, dash=(2, 4))
+        cv.create_text(6, 8, text="100%", anchor="w", fill=MUTED, font=F(7))
+        cv.create_text(6, h - 8, text="0%", anchor="w", fill=MUTED, font=F(7))
+
+        def series(data, color):
+            if len(data) < 2:
+                return
+            pts = []
+            n = len(data)
+            for i, v in enumerate(data):
+                x = w * i / 59.0
+                y = h - (h - 12) * (v / 100.0) - 6
+                pts.extend([x, y])
+            cv.create_line(*pts, fill=color, width=2, smooth=True)
+
+        series(self.hist["gpu"], ACCENT)
+        series(self.hist["vram"], PINK)
 
 
 class ModelManager(tk.Toplevel):
