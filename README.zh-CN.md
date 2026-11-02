@@ -2,6 +2,10 @@
 
 [English](README.md) | **简体中文**
 
+[![CI](https://github.com/Kezyoow/local-llm-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/Kezyoow/local-llm-chat/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
+
 > 一个能接入**任何本地大模型**的桌面聊天客户端。纯 Python + tkinter，无 Electron、无 Node、无内置 Web 服务。
 
 ![screenshot](docs/screenshot.png)

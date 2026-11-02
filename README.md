@@ -2,6 +2,10 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+[![CI](https://github.com/Kezyoow/local-llm-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/Kezyoow/local-llm-chat/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
+
 > A desktop chat client for **any local LLM** — Ollama, LM Studio, llama.cpp, vLLM, Jan and more.
 > Pure Python + tkinter. No Electron, no Node, no bundled web server.
 
