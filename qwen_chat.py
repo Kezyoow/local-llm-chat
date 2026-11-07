@@ -31,21 +31,65 @@ from PIL import Image, ImageDraw, ImageFilter, ImageTk
 import extract
 import providers
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
+FROZEN = bool(getattr(sys, "frozen", False))
+
+# 只读资源（图标、默认背景图）：打包后在 exe 内部临时目录
+RES_DIR = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(__file__))
+
+# 可写数据（会话、设置、上传缓存）：打包后写到 %APPDATA%，
+# 否则装在 Program Files 里根本没有写权限
+def _pick_user_dir():
+    """挑一个真正可写的数据目录（APPDATA 可能被策略或杀软拦掉）。"""
+    import tempfile
+    cands = []
+    for env in ("APPDATA", "LOCALAPPDATA"):
+        base = os.environ.get(env)
+        if base:
+            cands.append(os.path.join(base, "LocalLLMChat"))
+    cands.append(os.path.join(os.path.expanduser("~"), ".local-llm-chat"))
+    cands.append(os.path.join(tempfile.gettempdir(), "LocalLLMChat"))
+    for c in cands:
+        try:
+            os.makedirs(c, exist_ok=True)
+            probe = os.path.join(c, ".write_test")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("ok")
+            os.remove(probe)
+            return c
+        except Exception:
+            continue
+    return cands[-1]
+
+
+if FROZEN:
+    APP_DIR = _pick_user_dir()
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+try:
+    os.makedirs(APP_DIR, exist_ok=True)
+except Exception:
+    pass
+
 SESSION_DIR = os.path.join(APP_DIR, "sessions")
 UPLOAD_DIR = os.path.join(APP_DIR, "_uploads")
 SETTINGS_FILE = os.path.join(APP_DIR, "settings.json")
+
+
+def _res(*parts):
+    return os.path.join(RES_DIR, *parts)
+
+
 def _asset(*names):
     """按顺序找第一个存在的素材；都没有就用仓库自带的 default_*。"""
     for n in names:
-        p = os.path.join(APP_DIR, "assets", n)
+        p = _res("assets", n)
         if os.path.isfile(p):
             return p
-    return os.path.join(APP_DIR, "assets", names[-1])
+    return _res("assets", names[-1])
 
 
 # 用户自己的图优先，其次是仓库自带的中性默认图
-ICON_FILE = os.path.join(APP_DIR, "qwen.ico")
+ICON_FILE = _res("qwen.ico")
 BG_IMAGE = _asset("background.jpg", "default_bg.jpg")
 SIDE_IMAGE = _asset("side_card.jpg", "default_side.jpg")
 
@@ -2239,7 +2283,70 @@ class BenchmarkWindow(tk.Toplevel):
             self.app.calib = max(0.8, min(5.0, self.chars / ec))
 
 
+def _selftest():
+    """打包后的端到端自检；窗口版没有控制台，结果同时写到 TEMP 下的日志。"""
+    import traceback
+
+    lines = []
+    ok = [True]
+
+    def w(msg):
+        lines.append(str(msg))
+
+    def flush():
+        text = "\n".join(lines)
+        out = os.path.join(os.environ.get("TEMP") or ".", "local-llm-chat-selftest.log")
+        try:
+            with open(out, "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception:
+            pass
+        try:
+            print(text)
+        except Exception:
+            pass          # 窗口模式下 sys.stdout 是 None
+
+    try:
+        w(f"frozen = {FROZEN}")
+        w(f"RES_DIR = {RES_DIR}")
+        w(f"APP_DIR = {APP_DIR}")
+        w(f"icon      {os.path.isfile(ICON_FILE)}  {ICON_FILE}")
+        w(f"bg        {os.path.isfile(BG_IMAGE)}  {BG_IMAGE}")
+        w(f"side      {os.path.isfile(SIDE_IMAGE)}  {SIDE_IMAGE}")
+        w(f"extract   {extract.__file__}")
+        w(f"providers {providers.__file__}")
+
+        root = tk.Tk()
+        app = ChatApp(root)
+        root.update()
+        w(f"window    {root.title()}")
+        w(f"backend   {getattr(app.backend, 'label', None)}")
+        b = app.backend
+        if b is not None:
+            try:
+                w(f"ping      {b.ping()}")
+                w(f"models    {len(b.list_models())}")
+            except Exception as e:
+                w(f"ping      FAILED {e}")
+        app._open_perf()
+        root.update()
+        w("perf window OK")
+        w(f"settings  {SETTINGS_FILE}")
+        w("writable  " + str(os.access(APP_DIR, os.W_OK)))
+        root.destroy()
+    except Exception:
+        ok[0] = False
+        w("EXCEPTION:\n" + traceback.format_exc())
+
+    w("RESULT: " + ("OK" if ok[0] else "FAIL"))
+    flush()
+    sys.exit(0 if ok[0] else 1)
+
+
 def main():
+    if "--selftest" in sys.argv[1:] or os.environ.get("QWEN_CHAT_SELFTEST"):
+        _selftest()
+        return
     if sys.platform == "win32":
         try:
             import ctypes

@@ -48,6 +48,30 @@ python qwen_chat.py
 
 之后启动会记住配置（存在 `settings.json`，已加入 `.gitignore`）。
 
+## 安装（Windows 一键包）
+
+到 [Releases](../../releases/latest) 下载 `LocalLLMChat-Setup-<版本>.exe`，双击安装即可。
+**不需要预装 Python**，运行时已经打包进去。
+
+- 当前用户安装，**不需要管理员权限**：`%LOCALAPPDATA%\Programs\Local LLM Chat`
+- 自动创建桌面 / 开始菜单快捷方式，自带卸载程序
+- 设置、会话历史和上传缓存保存在 `%APPDATA%\LocalLLMChat`
+- 安装包暂未代码签名，SmartScreen 可能提示"Windows 已保护你的电脑"
+  → 点 **更多信息** → **仍要运行**
+
+模型仍需自备：先装好 [Ollama](https://ollama.com)（或 LM Studio / llama.cpp）。
+客户端会在服务没启动时自动帮你拉起 `ollama serve`。
+
+### 自己构建安装包
+
+```powershell
+pwsh -File build_installer.ps1 -Version 0.3.0
+```
+
+需要 Python 3.10+ 和 [Inno Setup 6](https://jrsoftware.org/isdl.php)
+（`winget install JRSoftware.InnoSetup`）。产物在 `build\installer\LocalLLMChat-Setup-<版本>.exe`。
+脚本会自动建虚拟环境、跑 PyInstaller，再用 `installer/LocalLLMChat.iss` 编译安装包。
+
 ## 支持的服务
 
 | 服务 | 协议 | 默认地址 |

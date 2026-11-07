@@ -11,6 +11,22 @@
 
 （下个版本的改动先写在这里，发版时整段移到对应版本号下）
 
+## [0.3.0] - 2026-11-07
+
+### Added
+
+- **Windows 一键安装包**：`LocalLLMChat-Setup-0.3.0.exe`（约 19 MB），双击即装，
+  不需要预装 Python；当前用户安装、无需管理员权限，自带桌面 / 开始菜单快捷方式与卸载器
+- **可复现的构建流程**：`build_installer.ps1` 自动建虚拟环境、跑 PyInstaller、编译
+  `installer/LocalLLMChat.iss`（Inno Setup）
+- **`--selftest` 自检模式**：打包后校验内置资源、后端连通性、窗口与性能面板能否创建
+
+### Changed
+
+- 打包后资源从 exe 内部读取（`RES_DIR`），用户数据改为写入可写目录：
+  优先 `%APPDATA%\LocalLLMChat`，不可写时依次回退到 `%LOCALAPPDATA%`、用户目录、临时目录
+- 源码运行时行为不变，仍使用脚本所在目录
+
 ## [0.2.1] - 2026-11-02
 
 ### Added
@@ -80,7 +96,8 @@
 - 扫描版 PDF 没有文字层，提取不到内容
 - 不支持 `.doc` / `.xls` / `.ppt` 旧格式
 
-[Unreleased]: https://github.com/Kezyoow/local-llm-chat/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Kezyoow/local-llm-chat/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Kezyoow/local-llm-chat/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Kezyoow/local-llm-chat/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Kezyoow/local-llm-chat/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Kezyoow/local-llm-chat/releases/tag/v0.1.0

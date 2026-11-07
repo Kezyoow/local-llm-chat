@@ -47,6 +47,31 @@ If the app says "no model connected yet":
 4. Click **Fetch list**, choose a model
 5. **Save**
 
+## Install (Windows, one click)
+
+Grab `LocalLLMChat-Setup-<version>.exe` from [Releases](../../releases/latest),
+double-click, done. **No Python required** — the runtime is bundled.
+
+- Per-user install, **no admin rights**: `%LOCALAPPDATA%\Programs\Local LLM Chat`
+- Desktop and Start Menu shortcuts, uninstaller included
+- Settings, history and uploads go to `%APPDATA%\LocalLLMChat`
+- The installer is not code-signed yet, so SmartScreen may show
+  *"Windows protected your PC"* → **More info** → **Run anyway**
+
+You still bring the model: install [Ollama](https://ollama.com) (or LM Studio / llama.cpp).
+The app starts `ollama serve` for you if it is not running.
+
+### Build the installer yourself
+
+```powershell
+pwsh -File build_installer.ps1 -Version 0.3.0
+```
+
+Requires Python 3.10+ and [Inno Setup 6](https://jrsoftware.org/isdl.php)
+(`winget install JRSoftware.InnoSetup`). Output: `build\installer\LocalLLMChat-Setup-<version>.exe`.
+The script creates its own virtualenv, runs PyInstaller, then compiles the Inno Setup script
+in `installer/LocalLLMChat.iss`.
+
 ## Supported services
 
 | Service | Protocol | Default URL |

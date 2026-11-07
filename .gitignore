@@ -39,3 +39,11 @@ _g*.py
 
 # 打包产物
 *.zip
+
+# 构建产物
+build/
+dist/
+.venv-build/
+*.spec
+install-test/
+tmp/
